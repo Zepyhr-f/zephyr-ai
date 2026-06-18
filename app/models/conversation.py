@@ -1,14 +1,10 @@
 import uuid
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING
 
 from sqlalchemy import JSON, DateTime, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin, UUIDMixin
-
-if TYPE_CHECKING:
-    from app.models.conversation import Message
 
 
 class Conversation(Base, UUIDMixin, TimestampMixin):
@@ -18,7 +14,10 @@ class Conversation(Base, UUIDMixin, TimestampMixin):
     title: Mapped[str | None] = mapped_column(String(255))
 
     messages: Mapped[list["Message"]] = relationship(
-        "Message", back_populates="conversation", cascade="all, delete-orphan"
+        "Message",
+        back_populates="conversation",
+        cascade="all, delete-orphan",
+        lazy="selectin",
     )
 
 
@@ -37,4 +36,6 @@ class Message(Base, UUIDMixin):
         default=lambda: datetime.now(timezone.utc),
     )
 
-    conversation: Mapped["Conversation"] = relationship("Conversation", back_populates="messages")
+    conversation: Mapped["Conversation"] = relationship(
+        "Conversation", back_populates="messages", lazy="selectin"
+    )

@@ -105,4 +105,3 @@ def downgrade() -> None:
     op.drop_table("chunks")
     op.drop_table("documents")
     op.drop_table("conversations")
-    op.execute("DROP EXTENSION IF EXISTS vector")

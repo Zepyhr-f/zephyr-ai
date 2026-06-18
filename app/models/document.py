@@ -17,5 +17,8 @@ class Document(Base, UUIDMixin, TimestampMixin):
     metadata_: Mapped[dict | None] = mapped_column("metadata", JSON)
 
     chunks: Mapped[list["Chunk"]] = relationship(
-        "Chunk", back_populates="document", cascade="all, delete-orphan"
+        "Chunk",
+        back_populates="document",
+        cascade="all, delete-orphan",
+        lazy="selectin",
     )

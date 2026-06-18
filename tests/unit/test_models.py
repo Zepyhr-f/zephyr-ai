@@ -1,8 +1,10 @@
+import importlib
 import uuid
 
 import pytest
 from pgvector.sqlalchemy import Vector
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import RelationshipProperty
 
 from app.core.database import AsyncSessionLocal, get_db_session
 from app.models import Base, Chunk, Conversation, Document, Message
@@ -36,6 +38,31 @@ def test_chunk_content_vector_uses_pgvector_dimension() -> None:
 
     assert isinstance(vector_type, Vector)
     assert vector_type.dim == 1536
+
+
+def test_relationships_use_selectin_loading_for_async_contexts() -> None:
+    relationships = (
+        Document.chunks.property,
+        Chunk.document.property,
+        Conversation.messages.property,
+        Message.conversation.property,
+    )
+
+    for relationship in relationships:
+        assert isinstance(relationship, RelationshipProperty)
+        assert relationship.lazy == "selectin"
+
+
+def test_initial_migration_downgrade_preserves_vector_extension(monkeypatch: pytest.MonkeyPatch) -> None:
+    migration = importlib.import_module("migrations.versions.0001_init")
+    executed_sql: list[str] = []
+
+    monkeypatch.setattr(migration.op, "drop_table", lambda _: None)
+    monkeypatch.setattr(migration.op, "execute", executed_sql.append)
+
+    migration.downgrade()
+
+    assert "DROP EXTENSION IF EXISTS vector" not in executed_sql
 
 
 @pytest.mark.asyncio

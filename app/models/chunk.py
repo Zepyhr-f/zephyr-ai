@@ -22,6 +22,8 @@ class Chunk(Base, UUIDMixin, TimestampMixin):
         nullable=False,
     )
     content: Mapped[str] = mapped_column(Text, nullable=False)
+    # The initial Alembic migration creates this column with the default
+    # embedding dimension of 1536; update migrations if the default changes.
     content_vector: Mapped[list[float]] = mapped_column(
         Vector(settings.embedding_dimension),
         nullable=False,
@@ -30,4 +32,6 @@ class Chunk(Base, UUIDMixin, TimestampMixin):
     header_path: Mapped[str | None] = mapped_column(String(512))
     metadata_: Mapped[dict | None] = mapped_column("metadata", JSON)
 
-    document: Mapped["Document"] = relationship("Document", back_populates="chunks")
+    document: Mapped["Document"] = relationship(
+        "Document", back_populates="chunks", lazy="selectin"
+    )
