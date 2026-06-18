@@ -3,7 +3,6 @@ name = "zephyr-ai"
 version = "0.1.0"
 description = "RAG + Agent system"
 authors = ["zephyr"]
-package-mode = false
 readme = "README.md"
 packages = [{ include = "app" }, { include = "cli" }]
 
@@ -49,5 +48,4 @@ target-version = "py311"
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
-pythonpath = ["."]
 addopts = "--cov=app --cov-report=term-missing"

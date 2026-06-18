@@ -29,7 +29,19 @@ def test_settings_singleton():
 def test_setup_logging_configures_root_logger(monkeypatch):
     monkeypatch.setenv("LOG_LEVEL", "DEBUG")
     get_settings.cache_clear()
+    monkeypatch.setattr(logging.getLogger(), "handlers", [])
 
     setup_logging()
 
     assert logging.getLogger().level == logging.DEBUG
+
+
+def test_setup_logging_preserves_existing_handlers(monkeypatch):
+    monkeypatch.setenv("LOG_LEVEL", "INFO")
+    get_settings.cache_clear()
+    existing_handler = logging.NullHandler()
+    monkeypatch.setattr(logging.getLogger(), "handlers", [existing_handler])
+
+    setup_logging()
+
+    assert existing_handler in logging.getLogger().handlers
