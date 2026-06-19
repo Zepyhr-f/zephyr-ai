@@ -8,7 +8,7 @@ def test_settings_defaults():
     s = Settings()
     assert s.llm_provider == "openai"
     assert s.openai_model == "gpt-4o-mini"
-    assert s.embedding_dimension == 1536
+    assert s.embedding_dimension == 2048
 
 
 def test_settings_from_env(monkeypatch):

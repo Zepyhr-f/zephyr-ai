@@ -37,7 +37,7 @@ def test_chunk_content_vector_uses_pgvector_dimension() -> None:
     vector_type = Chunk.__table__.c.content_vector.type
 
     assert isinstance(vector_type, Vector)
-    assert vector_type.dim == 1536
+    assert vector_type.dim == 2048
 
 
 def test_relationships_use_selectin_loading_for_async_contexts() -> None:
@@ -93,7 +93,7 @@ async def test_document_chunks_relationship(db_session: AsyncSession) -> None:
     chunk = Chunk(
         document_id=doc.id,
         content="test content",
-        content_vector=[0.1] * 1536,
+        content_vector=[0.1] * 2048,
         chunk_index=0,
         header_path="Root > Section",
         metadata_={"page": 1},

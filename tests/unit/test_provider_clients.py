@@ -1,5 +1,4 @@
-import sys
-from types import ModuleType, SimpleNamespace
+from types import SimpleNamespace
 from typing import cast
 
 import httpx
@@ -51,11 +50,10 @@ class FakeAsyncHTTPClient:
         ("ANTHROPIC_BASE_URL", "https://anthropic.example/api", "anthropic_base_url"),
         ("ANTHROPIC_MODEL", "ark-code-test", "anthropic_model"),
         ("EMBEDDING_PROVIDER", "ark", "embedding_provider"),
-        ("ARK_EMBEDDING_API_KEY", "test-key", "ark_embedding_api_key"),
+        ("ARK_EMBEDDING_API_KEY", "placeholder-token", "ark_embedding_api_key"),
         ("ARK_EMBEDDING_BASE_URL", "https://ark.example/api/v3", "ark_embedding_base_url"),
-        ("ARK_EMBEDDING_MODEL", "doubao-test", "ark_embedding_model"),
-        ("LAS_API_KEY", "test-las-key", "las_api_key"),
-        ("LAS_EMBEDDING_MODEL", "doubao-las-test", "las_embedding_model"),
+        ("ARK_EMBEDDING_ENDPOINT", "/embeddings/multimodal", "ark_embedding_endpoint"),
+        ("ARK_EMBEDDING_MODEL", "ep-test", "ark_embedding_model"),
         ("EMBEDDING_DIMENSION", "1024", "embedding_dimension"),
     ],
 )
@@ -76,9 +74,9 @@ def test_settings_provider_defaults() -> None:
     assert settings.anthropic_model == "ark-code-latest"
     assert settings.embedding_provider == "ark"
     assert settings.ark_embedding_base_url == "https://ark.cn-beijing.volces.com/api/v3"
-    assert settings.ark_embedding_model == "doubao-embedding"
-    assert settings.las_embedding_model == "doubao-embedding"
-    assert settings.embedding_dimension == 1536
+    assert settings.ark_embedding_endpoint == "/embeddings/multimodal"
+    assert settings.ark_embedding_model == "ep-20260619185149-f9c8c"
+    assert settings.embedding_dimension == 2048
 
 
 @pytest.mark.asyncio
@@ -145,34 +143,85 @@ async def test_llm_client_parses_multiple_text_blocks() -> None:
 
 
 @pytest.mark.asyncio
-async def test_embedding_client_posts_openai_compatible_request() -> None:
+async def test_embedding_client_posts_ark_multimodal_request() -> None:
     from app.core.embedding_client import create_embedding_client
 
     http_client = FakeAsyncHTTPClient(
-        FakeResponse({"data": [{"embedding": [0.1, 0.2]}, {"embedding": [0.3, 0.4]}]})
+        FakeResponse({"data": {"object": "embedding", "embedding": [0.1, 0.2]}})
     )
     settings = Settings(
         _env_file=None,
         embedding_provider="ark",
-        ark_embedding_api_key="test-key",
+        ark_embedding_api_key="placeholder-token",
         ark_embedding_base_url="https://ark.example/api/v3",
-        ark_embedding_model="doubao-test",
+        ark_embedding_endpoint="/embeddings/multimodal",
+        ark_embedding_model="ep-test",
     )
 
     client = create_embedding_client(settings, http_client=http_client)
     vectors = await client.embed_texts(["alpha", "beta"])
 
-    assert vectors == [[0.1, 0.2], [0.3, 0.4]]
+    assert vectors == [[0.1, 0.2], [0.1, 0.2]]
     assert http_client.calls == [
         {
-            "url": "https://ark.example/api/v3/embeddings",
+            "url": "https://ark.example/api/v3/embeddings/multimodal",
             "headers": {
-                "Authorization": "Bearer test-key",
+                "Authorization": "Bearer placeholder-token",
                 "Content-Type": "application/json",
             },
-            "json": {"model": "doubao-test", "input": ["alpha", "beta"]},
+            "json": {
+                "model": "ep-test",
+                "input": [
+                    {"type": "text", "text": "alpha"},
+                ],
+            },
+        },
+        {
+            "url": "https://ark.example/api/v3/embeddings/multimodal",
+            "headers": {
+                "Authorization": "Bearer placeholder-token",
+                "Content-Type": "application/json",
+            },
+            "json": {
+                "model": "ep-test",
+                "input": [
+                    {"type": "text", "text": "beta"},
+                ],
+            },
         }
     ]
+
+
+@pytest.mark.asyncio
+async def test_embedding_client_accepts_endpoint_without_leading_slash() -> None:
+    from app.core.embedding_client import create_embedding_client
+
+    http_client = FakeAsyncHTTPClient(FakeResponse({"data": [{"embedding": [0.1]}]}))
+    settings = Settings(
+        _env_file=None,
+        ark_embedding_api_key="placeholder-token",
+        ark_embedding_base_url="https://ark.example/api/v3",
+        ark_embedding_endpoint="embeddings/multimodal",
+        ark_embedding_model="ep-test",
+    )
+
+    client = create_embedding_client(settings, http_client=http_client)
+    await client.embed_texts(["alpha"])
+
+    assert http_client.calls[0]["url"] == "https://ark.example/api/v3/embeddings/multimodal"
+
+
+@pytest.mark.asyncio
+async def test_embedding_client_parses_multimodal_object_response() -> None:
+    from app.core.embedding_client import create_embedding_client
+
+    http_client = FakeAsyncHTTPClient(FakeResponse({"data": {"object": "embedding", "embedding": [0.5, 0.6]}}))
+    settings = Settings(_env_file=None, ark_embedding_api_key="placeholder-token")
+
+    client = create_embedding_client(settings, http_client=http_client)
+    vector = await client.embed_query("alpha")
+
+    assert vector == [0.5, 0.6]
 
 
 @pytest.mark.asyncio
@@ -180,7 +229,7 @@ async def test_embedding_client_embed_query_returns_single_vector() -> None:
     from app.core.embedding_client import create_embedding_client
 
     http_client = FakeAsyncHTTPClient(FakeResponse({"data": [{"embedding": [0.1, 0.2]}]}))
-    settings = Settings(_env_file=None, ark_embedding_api_key="test-key")
+    settings = Settings(_env_file=None, ark_embedding_api_key="placeholder-token")
 
     client = create_embedding_client(settings, http_client=http_client)
     vector = await client.embed_query("alpha")
@@ -188,103 +237,13 @@ async def test_embedding_client_embed_query_returns_single_vector() -> None:
     assert vector == [0.1, 0.2]
 
 
-@pytest.mark.asyncio
-async def test_create_embedding_client_supports_las_doubao(monkeypatch: pytest.MonkeyPatch) -> None:
-    from app.core.embedding_client import LasDoubaoEmbeddingClient, create_embedding_client
-
-    class FakeTable:
-        def __init__(self, data: dict) -> None:
-            self.data = data
-
-        def __getitem__(self, key: str) -> list[str]:
-            return self.data[key]
-
-        def with_column(self, name: str, values: list[list[float]]) -> "FakeTable":
-            self.data[name] = values
-            return self
-
-        def collect(self) -> "FakeTable":
-            return self
-
-        def to_pydict(self) -> dict:
-            return self.data
-
-    class FakeDaft(ModuleType):
-        def from_pydict(self, data: dict) -> FakeTable:
-            return FakeTable(data)
-
-    class FakeDoubaoEmbeddingText:
-        pass
-
-    def fake_col(name: str) -> str:
-        return name
-
-    def fake_las_udf(function: object, construct_args: dict) -> object:
-        assert function is FakeDoubaoEmbeddingText
-        assert construct_args == {"model": "doubao-las-test"}
-
-        def apply(_: str) -> list[list[float]]:
-            return [[0.0, 1.0], [1.0, 2.0]]
-
-        return apply
-
-    fake_daft = FakeDaft("daft")
-    fake_daft.col = fake_col
-    fake_daft_las = ModuleType("daft.las")
-    fake_daft_las_functions = ModuleType("daft.las.functions")
-    fake_daft_las_functions_ark_llm = ModuleType("daft.las.functions.ark_llm")
-    fake_doubao_module = ModuleType("daft.las.functions.ark_llm.doubao_embedding_text")
-    fake_doubao_module.DoubaoEmbeddingText = FakeDoubaoEmbeddingText
-    fake_udf_module = ModuleType("daft.las.functions.udf")
-    fake_udf_module.las_udf = fake_las_udf
-    monkeypatch.setitem(sys.modules, "daft", fake_daft)
-    monkeypatch.setitem(sys.modules, "daft.las", fake_daft_las)
-    monkeypatch.setitem(sys.modules, "daft.las.functions", fake_daft_las_functions)
-    monkeypatch.setitem(sys.modules, "daft.las.functions.ark_llm", fake_daft_las_functions_ark_llm)
-    monkeypatch.setitem(sys.modules, "daft.las.functions.ark_llm.doubao_embedding_text", fake_doubao_module)
-    monkeypatch.setitem(sys.modules, "daft.las.functions.udf", fake_udf_module)
-
-    settings = Settings(
-        _env_file=None,
-        embedding_provider="las_doubao",
-        las_embedding_model="doubao-las-test",
-    )
-    settings.las_api_key = "test-las-token"
-
-    client = create_embedding_client(settings)
-    vectors = await client.embed_texts(["alpha", "beta"])
-
-    assert isinstance(client, LasDoubaoEmbeddingClient)
-    assert vectors == [[0.0, 1.0], [1.0, 2.0]]
-
-
-def test_las_doubao_missing_api_key_raises() -> None:
+def test_embedding_client_missing_api_key_raises() -> None:
     from app.core.embedding_client import create_embedding_client
 
-    settings = Settings(_env_file=None, embedding_provider="las_doubao")
+    settings = Settings(_env_file=None, embedding_provider="ark")
 
-    with pytest.raises(ValueError, match="LAS_API_KEY is required"):
+    with pytest.raises(ValueError, match="ARK_EMBEDDING_API_KEY is required"):
         create_embedding_client(settings)
-
-
-@pytest.mark.asyncio
-async def test_las_doubao_error_message_does_not_leak_key(monkeypatch: pytest.MonkeyPatch) -> None:
-    from app.core.embedding_client import EmbeddingProviderError, create_embedding_client
-
-    non_sensitive_token = "test-las-token-redacted"
-
-    def fake_load_las_dependencies():
-        raise ImportError("missing dependency")
-
-    monkeypatch.setattr("app.core.embedding_client._load_las_dependencies", fake_load_las_dependencies)
-    settings = Settings(_env_file=None, embedding_provider="las_doubao")
-    settings.las_api_key = non_sensitive_token
-    client = create_embedding_client(settings)
-
-    with pytest.raises(EmbeddingProviderError) as exc_info:
-        await client.embed_texts(["alpha"])
-
-    assert non_sensitive_token not in str(exc_info.value)
 
 
 def test_unsupported_providers_raise_clear_errors() -> None:

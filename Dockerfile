@@ -14,7 +14,6 @@ RUN if [ -n "${PIP_INDEX_URL:-}" ]; then pip config set global.index-url "${PIP_
     && pip install --no-cache-dir \
         alembic==1.14.1 \
         asyncpg==0.30.0 \
-        daft \
         fastapi==0.115.14 \
         greenlet==3.2.4 \
         httpx==0.27.2 \

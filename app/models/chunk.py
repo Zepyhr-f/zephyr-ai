@@ -22,8 +22,8 @@ class Chunk(Base, UUIDMixin, TimestampMixin):
         nullable=False,
     )
     content: Mapped[str] = mapped_column(Text, nullable=False)
-    # The initial Alembic migration creates this column with the default
-    # embedding dimension of 1536; update migrations if the default changes.
+    # Alembic migration 0002 updates this column to the current default
+    # embedding dimension of 2048.
     content_vector: Mapped[list[float]] = mapped_column(
         Vector(settings.embedding_dimension),
         nullable=False,
