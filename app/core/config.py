@@ -23,12 +23,14 @@ class Settings(BaseSettings):
     ollama_model: str = "llama3.1"
 
     # Embedding
-    embedding_provider: Literal["openai", "huggingface", "ollama", "ark"] = "ark"
+    embedding_provider: Literal["openai", "huggingface", "ollama", "ark", "las_doubao"] = "ark"
     embedding_model: str = "text-embedding-3-small"
     embedding_dimension: int = 1536
     ark_embedding_api_key: str | None = None
     ark_embedding_base_url: str = "https://ark.cn-beijing.volces.com/api/v3"
     ark_embedding_model: str = "doubao-embedding"
+    las_api_key: str | None = None
+    las_embedding_model: str = "doubao-embedding"
 
     # Database
     database_url: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/zephyr_ai"
