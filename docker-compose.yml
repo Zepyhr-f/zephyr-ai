@@ -1,22 +1,21 @@
-version: "3.8"
-
 services:
-  postgres:
-    image: ankane/pgvector:latest
-    container_name: zephyr-postgres
+  zephyr-ai:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: zephyr-ai:local
+    container_name: zephyr-ai
+    restart: unless-stopped
+    env_file:
+      - .env
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: zephyr_ai
+      API_HOST: 0.0.0.0
+      API_PORT: 8000
     ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
+      - "127.0.0.1:${ZEPHYR_AI_PORT:-8000}:8000"
+    networks:
+      - infra_default
 
-volumes:
-  postgres_data:
+networks:
+  infra_default:
+    external: true

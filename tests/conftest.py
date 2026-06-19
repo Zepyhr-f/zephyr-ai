@@ -18,7 +18,7 @@ engine = create_async_engine(TEST_DATABASE_URL, echo=False, future=True, poolcla
 AsyncTestSession = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
 
-@pytest_asyncio.fixture(scope="session", autouse=True)
+@pytest_asyncio.fixture(scope="session")
 async def setup_database() -> AsyncGenerator[None, None]:
     async with engine.begin() as conn:
         await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
@@ -30,7 +30,7 @@ async def setup_database() -> AsyncGenerator[None, None]:
 
 
 @pytest_asyncio.fixture
-async def db_session() -> AsyncGenerator[AsyncSession, None]:
+async def db_session(setup_database: None) -> AsyncGenerator[AsyncSession, None]:
     async with AsyncTestSession() as session:
         yield session
         await session.rollback()
