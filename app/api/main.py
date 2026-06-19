@@ -1,11 +1,19 @@
 from fastapi import FastAPI
 from sqlalchemy import text
 
+from app.api.admin import router as admin_router
+from app.api.conversations import router as conversations_router
+from app.api.feedback import router as feedback_router
+from app.api.knowledge import router as knowledge_router
 from app.api.rag import router as rag_router
 from app.core.database import engine
 
 app = FastAPI(title="Zephyr AI", version="0.1.0")
 app.include_router(rag_router)
+app.include_router(knowledge_router)
+app.include_router(conversations_router)
+app.include_router(feedback_router)
+app.include_router(admin_router)
 
 
 @app.get("/health")

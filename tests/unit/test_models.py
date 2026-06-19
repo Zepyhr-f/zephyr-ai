@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import RelationshipProperty
 
 from app.core.database import AsyncSessionLocal, get_db_session
-from app.models import Base, Chunk, Conversation, Document, Message
+from app.models import Base, Chunk, Conversation, Document, Feedback, Message
 
 
 def test_database_session_factory_uses_async_session() -> None:
@@ -29,6 +29,7 @@ def test_models_are_registered_with_expected_tables() -> None:
         "chunks",
         "conversations",
         "documents",
+        "feedback",
         "messages",
     }
 
@@ -46,6 +47,8 @@ def test_relationships_use_selectin_loading_for_async_contexts() -> None:
         Chunk.document.property,
         Conversation.messages.property,
         Message.conversation.property,
+        Feedback.conversation.property,
+        Feedback.message.property,
     )
 
     for relationship in relationships:

@@ -14,6 +14,8 @@ class SemanticSearchResult:
     metadata: dict | None
     distance: float
     score: float
+    chunk_id: str | None = None
+    document_id: str | None = None
 
 
 class SearchSimilarRepository(Protocol):

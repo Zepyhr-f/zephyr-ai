@@ -23,3 +23,29 @@ class RagChatResponse(BaseModel):
     conversation_id: str
     answer: str
     sources: list[RagSource]
+    assistant_message_id: str | None = None
+
+
+class RagRetrieveRequest(BaseModel):
+    query: str = Field(..., min_length=1, max_length=4000)
+    top_k: int = Field(default=5, ge=1, le=20)
+
+
+class RagRetrieveResponse(BaseModel):
+    query: str
+    top_k: int
+    sources: list[RagSource]
+
+
+class RagDebugRequest(BaseModel):
+    query: str = Field(..., min_length=1, max_length=4000)
+    top_k: int = Field(default=5, ge=1, le=20)
+
+
+class RagDebugResponse(BaseModel):
+    query: str
+    top_k: int
+    retrieved_chunks: list[RagSource]
+    selected_context: str
+    prompt_preview: str
+    estimated_context_chars: int

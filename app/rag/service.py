@@ -6,12 +6,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.llm_client import ChatMessage, LLMClient
 from app.models.conversation import Conversation, Message
+from app.rag.prompt import SYSTEM_PROMPT, build_prompt, chunk_index, source_from_result
 from app.rag.schemas import RagChatResponse, RagSource
 from app.retrieval.service import SemanticRetrievalService, SemanticSearchResult
-
-SYSTEM_PROMPT = """你是 Zephyr 项目的 RAG 助手。请只基于给定上下文回答问题。
-如果上下文不足以回答，请明确说明当前知识库没有足够信息。
-回答要简洁、准确，并尽量引用 Zephyr 项目的真实术语。"""
 
 
 @dataclass(frozen=True)
@@ -56,7 +53,7 @@ class RagChatService:
             history = await self._recent_messages(conversation.id)
 
         results = await self.retrieval_service.search(normalized_message, limit=top_k)
-        prompt = self._build_prompt(normalized_message, results, history)
+        prompt = build_prompt(normalized_message, results, history)
         answer = await self.llm_client.chat(
             [
                 ChatMessage(role="system", content=SYSTEM_PROMPT),
@@ -65,7 +62,7 @@ class RagChatService:
             max_tokens=max_tokens,
             temperature=temperature,
         )
-        sources = [self._source_from_result(result) for result in results]
+        sources = [source_from_result(result) for result in results]
         self.session.add(
             Message(
                 conversation_id=conversation.id,
@@ -74,20 +71,20 @@ class RagChatService:
                 tool_calls=None,
             )
         )
-        self.session.add(
-            Message(
-                conversation_id=conversation.id,
-                role="assistant",
-                content=answer,
-                tool_calls={"sources": [source.model_dump() for source in sources]},
-            )
+        assistant_message = Message(
+            conversation_id=conversation.id,
+            role="assistant",
+            content=answer,
+            tool_calls={"sources": [source.model_dump() for source in sources]},
         )
+        self.session.add(assistant_message)
         await self.session.flush()
 
         return RagChatResponse(
             conversation_id=conversation.thread_id,
             answer=answer,
             sources=sources,
+            assistant_message_id=str(assistant_message.id),
         )
 
     async def _get_or_create_conversation(
@@ -127,59 +124,10 @@ class RagChatService:
         results: list[SemanticSearchResult],
         history: list[Message] | None = None,
     ) -> str:
-        if not results:
-            context = "当前没有检索到相关知识库片段。"
-        else:
-            context = "\n\n".join(
-                self._format_context(index, result)
-                for index, result in enumerate(results, start=1)
-            )
-
-        history_block = ""
-        if history:
-            formatted_history = "\n".join(self._format_history(item) for item in history)
-            history_block = f"历史对话：\n{formatted_history}\n\n"
-
-        return (
-            "请基于以下知识库上下文回答用户问题。\n\n"
-            f"{history_block}"
-            f"知识库上下文：\n{context}\n\n"
-            f"用户问题：\n{message}\n\n"
-            "回答要求：\n"
-            "1. 优先使用上下文中的信息。\n"
-            "2. 如果上下文不足，请说明不足。\n"
-            "3. 不要编造未出现在上下文中的部署细节、密钥或连接串。"
-        )
-
-    def _format_context(self, index: int, result: SemanticSearchResult) -> str:
-        title = result.document_title or "Untitled"
-        header = result.header_path or ""
-        return (
-            f"[{index}] title={title}\n"
-            f"file={result.document_file_path}\n"
-            f"header={header}\n"
-            f"score={result.score:.6f}\n"
-            f"content={result.content}"
-        )
-
-    def _format_history(self, message: Message) -> str:
-        content = message.content.replace("\n", " ")[:800]
-        return f"{message.role}: {content}"
+        return build_prompt(message, results, history)
 
     def _source_from_result(self, result: SemanticSearchResult) -> RagSource:
-        preview = result.content.replace("\n", " ")[:200]
-        return RagSource(
-            title=result.document_title,
-            file_path=result.document_file_path,
-            header_path=result.header_path,
-            score=result.score,
-            preview=preview,
-            chunk_index=self._chunk_index(result),
-        )
+        return source_from_result(result)
 
     def _chunk_index(self, result: SemanticSearchResult) -> int | None:
-        metadata = result.metadata or {}
-        try:
-            return int(metadata.get("chunk_index"))
-        except (TypeError, ValueError):
-            return None
+        return chunk_index(result)

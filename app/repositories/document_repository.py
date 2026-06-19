@@ -1,4 +1,6 @@
-from sqlalchemy import delete, select
+import uuid
+
+from sqlalchemy import func, select, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ingestion.markdown import MarkdownChunk, MarkdownDocument
@@ -50,3 +52,15 @@ class DocumentRepository:
             StoredDocumentChunk(chunk=chunk, vector=vector)
             for chunk, vector in chunk_vectors
         ]
+
+    async def count(self) -> int:
+        return int(await self.session.scalar(select(func.count()).select_from(Document)) or 0)
+
+    async def list_documents(self, *, offset: int = 0, limit: int = 50) -> list[Document]:
+        result = await self.session.execute(
+            select(Document).order_by(Document.updated_at.desc()).offset(offset).limit(limit)
+        )
+        return list(result.scalars().all())
+
+    async def get(self, document_id: uuid.UUID) -> Document | None:
+        return await self.session.get(Document, document_id)

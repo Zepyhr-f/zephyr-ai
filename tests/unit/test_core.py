@@ -6,8 +6,9 @@ from app.core.logging import setup_logging
 
 def test_settings_defaults():
     s = Settings()
-    assert s.llm_provider == "openai"
-    assert s.openai_model == "gpt-4o-mini"
+    assert s.llm_provider == "anthropic"
+    assert s.anthropic_model in {"ark-code-latest", "deepseek-v4-flash"}
+    assert s.embedding_provider == "ark"
     assert s.embedding_dimension == 2048
 
 

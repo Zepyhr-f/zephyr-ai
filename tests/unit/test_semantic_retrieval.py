@@ -89,6 +89,8 @@ async def test_chunk_repository_search_similar_returns_result_fields(monkeypatch
         def all(self) -> list[SimpleNamespace]:
             return [
                 SimpleNamespace(
+                    id="chunk-1",
+                    document_id="document-1",
                     content="chunk content",
                     header_path="Intro",
                     metadata_={"source": "unit"},
@@ -120,5 +122,7 @@ async def test_chunk_repository_search_similar_returns_result_fields(monkeypatch
             metadata={"source": "unit"},
             distance=0.2,
             score=0.8,
+            chunk_id="chunk-1",
+            document_id="document-1",
         )
     ]

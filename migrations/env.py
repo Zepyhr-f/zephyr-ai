@@ -11,6 +11,7 @@ from app.models.base import Base
 from app.models.chunk import Chunk  # noqa: F401
 from app.models.conversation import Conversation, Message  # noqa: F401
 from app.models.document import Document  # noqa: F401
+from app.models.feedback import Feedback  # noqa: F401
 
 config = context.config
 settings = get_settings()

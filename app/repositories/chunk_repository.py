@@ -1,4 +1,6 @@
-from sqlalchemy import select
+import uuid
+
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Chunk, Document
@@ -17,6 +19,8 @@ class ChunkRepository:
         distance = Chunk.content_vector.cosine_distance(vector).label("distance")
         statement = (
             select(
+                Chunk.id,
+                Chunk.document_id,
                 Chunk.content,
                 Chunk.header_path,
                 Chunk.metadata_,
@@ -39,6 +43,22 @@ class ChunkRepository:
                 metadata=row.metadata_,
                 distance=float(row.distance),
                 score=1 - float(row.distance),
+                chunk_id=str(row.id),
+                document_id=str(row.document_id),
             )
             for row in rows
         ]
+
+    async def count(self) -> int:
+        return int(await self.session.scalar(select(func.count()).select_from(Chunk)) or 0)
+
+    async def count_by_document(self, document_id: uuid.UUID) -> int:
+        return int(
+            await self.session.scalar(
+                select(func.count()).select_from(Chunk).where(Chunk.document_id == document_id)
+            )
+            or 0
+        )
+
+    async def get(self, chunk_id: uuid.UUID) -> Chunk | None:
+        return await self.session.get(Chunk, chunk_id)

@@ -49,6 +49,11 @@ Zephyr AI 当前承担三类职责：
 - 2048 维 pgvector 向量存储
 - 语义检索
 - RAG Chat API
+- Knowledge stats / documents / chunks / search API
+- RAG retrieve / debug API
+- Conversation read API
+- Feedback API
+- Admin diagnostics / providers / version API
 - 多轮会话 `conversation_id`
 - 最近历史对话注入
 - sources 引用来源返回
@@ -61,6 +66,20 @@ Zephyr AI 当前承担三类职责：
 ```text
 GET  /health
 POST /api/v1/rag/chat
+POST /api/v1/rag/retrieve
+POST /api/v1/rag/debug
+GET  /api/v1/knowledge/stats
+GET  /api/v1/knowledge/documents
+GET  /api/v1/knowledge/documents/{document_id}
+GET  /api/v1/knowledge/chunks/{chunk_id}
+POST /api/v1/knowledge/search
+GET  /api/v1/conversations/{conversation_id}
+GET  /api/v1/conversations/{conversation_id}/messages
+POST /api/v1/feedback
+GET  /api/v1/feedback/stats
+GET  /api/v1/admin/diagnostics
+GET  /api/v1/admin/providers
+GET  /api/v1/admin/version
 ```
 
 ---
@@ -69,7 +88,7 @@ POST /api/v1/rag/chat
 
 | 类型 | 技术 |
 | --- | --- |
-| 语言 | Python 3.11 |
+| 语言 | Python 3.12.3 |
 | Web 框架 | FastAPI |
 | ASGI Server | Uvicorn |
 | 配置 | pydantic-settings |
