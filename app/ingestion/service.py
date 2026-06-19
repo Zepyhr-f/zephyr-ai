@@ -3,6 +3,7 @@ from pathlib import Path
 from typing import Protocol
 
 from app.core.embedding_client import EmbeddingClient
+from app.core.vector_utils import normalize_vector
 from app.ingestion.markdown import (
     MarkdownChunk,
     MarkdownDocument,
@@ -70,7 +71,12 @@ class EmbeddingIngestionService:
                 f"Embedding vector count {len(vectors)} does not match chunk count {len(chunks)}"
             )
 
-        chunk_vectors = list(zip(chunks, vectors))
+        try:
+            normalized_vectors = [normalize_vector(vector) for vector in vectors]
+        except ValueError as exc:
+            raise EmbeddingIngestionError("Embedding vector normalization failed") from exc
+
+        chunk_vectors = list(zip(chunks, normalized_vectors))
         stored_chunks = await self.store.upsert_document_with_chunks(document, chunk_vectors)
         return DocumentIngestionResult(
             document=document,

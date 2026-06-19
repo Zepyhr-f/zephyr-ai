@@ -15,7 +15,7 @@ class FakeEmbeddingClient:
         self.calls.append(texts)
         if self.vectors is not None:
             return self.vectors
-        return [[float(index)] for index, _ in enumerate(texts)]
+        return [[float(index + 1)] for index, _ in enumerate(texts)]
 
 
 class FakeStore:
@@ -87,7 +87,7 @@ async def test_ingest_document_rejects_vector_count_mismatch_without_store_call(
 async def test_ingest_document_passes_chunk_fields_and_vectors_to_store() -> None:
     document = make_document()
     chunks = make_chunks()
-    vectors = [[0.1, 0.2], [0.3, 0.4]]
+    vectors = [[3.0, 4.0], [0.0, 2.0]]
     store = FakeStore()
     service = EmbeddingIngestionService(
         embedding_client=FakeEmbeddingClient(vectors),
@@ -102,8 +102,8 @@ async def test_ingest_document_passes_chunk_fields_and_vectors_to_store() -> Non
         {
             "document": document,
             "chunk_vectors": [
-                (chunks[0], [0.1, 0.2]),
-                (chunks[1], [0.3, 0.4]),
+                (chunks[0], [0.6, 0.8]),
+                (chunks[1], [0.0, 1.0]),
             ],
         }
     ]
@@ -112,9 +112,21 @@ async def test_ingest_document_passes_chunk_fields_and_vectors_to_store() -> Non
     assert store.calls[0]["chunk_vectors"][0][0].header_path == "Intro"
     assert store.calls[0]["chunk_vectors"][0][0].metadata == {"chunk_index": 0, "header_path": "Intro"}
     assert result.stored_chunks == [
-        {"chunk": chunks[0], "vector": [0.1, 0.2]},
-        {"chunk": chunks[1], "vector": [0.3, 0.4]},
+        {"chunk": chunks[0], "vector": [0.6, 0.8]},
+        {"chunk": chunks[1], "vector": [0.0, 1.0]},
     ]
+
+
+@pytest.mark.asyncio
+async def test_ingest_document_rejects_zero_embedding_vector_without_store_call() -> None:
+    embedding_client = FakeEmbeddingClient([[0.0, 0.0], [1.0, 0.0]])
+    store = FakeStore()
+    service = EmbeddingIngestionService(embedding_client=embedding_client, store=store)
+
+    with pytest.raises(EmbeddingIngestionError, match="normalization failed"):
+        await service.ingest_document(make_document(), make_chunks())
+
+    assert store.calls == []
 
 
 @pytest.mark.asyncio
