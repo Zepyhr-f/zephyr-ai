@@ -49,6 +49,9 @@ class FakeAsyncHTTPClient:
         ("ANTHROPIC_AUTH_TOKEN", "test-token", "anthropic_auth_token"),
         ("ANTHROPIC_BASE_URL", "https://anthropic.example/api", "anthropic_base_url"),
         ("ANTHROPIC_MODEL", "ark-code-test", "anthropic_model"),
+        ("OPENAI_API_KEY", "test-openai-key", "openai_api_key"),
+        ("OPENAI_BASE_URL", "https://openai-compatible.example/v1", "openai_base_url"),
+        ("OPENAI_MODEL", "openai-compatible-model", "openai_model"),
         ("EMBEDDING_PROVIDER", "ark", "embedding_provider"),
         ("ARK_EMBEDDING_API_KEY", "placeholder-token", "ark_embedding_api_key"),
         ("ARK_EMBEDDING_BASE_URL", "https://ark.example/api/v3", "ark_embedding_base_url"),
@@ -72,6 +75,8 @@ def test_settings_provider_defaults() -> None:
     assert settings.llm_provider == "anthropic"
     assert settings.anthropic_base_url == "https://ark.cn-beijing.volces.com/api/coding"
     assert settings.anthropic_model == "ark-code-latest"
+    assert settings.openai_base_url == "https://api.openai.com/v1"
+    assert settings.openai_model == "gpt-4o-mini"
     assert settings.embedding_provider == "ark"
     assert settings.ark_embedding_base_url == "https://ark.cn-beijing.volces.com/api/v3"
     assert settings.ark_embedding_endpoint == "/embeddings/multimodal"
@@ -117,6 +122,74 @@ async def test_llm_client_posts_anthropic_messages_request() -> None:
             },
         }
     ]
+
+
+@pytest.mark.asyncio
+async def test_llm_client_posts_openai_chat_completions_request() -> None:
+    from app.core.llm_client import ChatMessage, create_llm_client
+
+    http_client = FakeAsyncHTTPClient(
+        FakeResponse({"choices": [{"message": {"content": "hello"}}]})
+    )
+    settings = Settings(
+        _env_file=None,
+        llm_provider="openai",
+        openai_api_key="test-openai-key",
+        openai_base_url="https://openai-compatible.example/v1/",
+        openai_model="openai-compatible-model",
+    )
+
+    client = create_llm_client(settings, http_client=http_client)
+    text = await client.chat(
+        [ChatMessage(role="user", content="Hi")],
+        max_tokens=128,
+        temperature=0.3,
+    )
+
+    assert text == "hello"
+    assert http_client.calls == [
+        {
+            "url": "https://openai-compatible.example/v1/chat/completions",
+            "headers": {
+                "Authorization": "Bearer test-openai-key",
+                "Content-Type": "application/json",
+            },
+            "json": {
+                "model": "openai-compatible-model",
+                "messages": [{"role": "user", "content": "Hi"}],
+                "max_tokens": 128,
+                "temperature": 0.3,
+            },
+        }
+    ]
+
+
+@pytest.mark.asyncio
+async def test_llm_client_parses_openai_message_content() -> None:
+    from app.core.llm_client import ChatMessage, create_llm_client
+
+    http_client = FakeAsyncHTTPClient(
+        FakeResponse(
+            {
+                "choices": [
+                    {
+                        "index": 0,
+                        "message": {"role": "assistant", "content": "OpenAI-compatible response"},
+                    }
+                ]
+            }
+        )
+    )
+    settings = Settings(
+        _env_file=None,
+        llm_provider="openai",
+        openai_api_key="test-openai-key",
+    )
+
+    client = create_llm_client(settings, http_client=http_client)
+    text = await client.chat([ChatMessage(role="user", content="Hi")])
+
+    assert text == "OpenAI-compatible response"
 
 
 @pytest.mark.asyncio
@@ -235,6 +308,31 @@ async def test_embedding_client_embed_query_returns_single_vector() -> None:
     vector = await client.embed_query("alpha")
 
     assert vector == [0.1, 0.2]
+
+
+def test_llm_client_missing_openai_api_key_raises() -> None:
+    from app.core.llm_client import create_llm_client
+
+    settings = Settings(_env_file=None, llm_provider="openai")
+
+    with pytest.raises(ValueError, match="OPENAI_API_KEY is required"):
+        create_llm_client(settings)
+
+
+@pytest.mark.asyncio
+async def test_llm_openai_error_message_does_not_leak_key() -> None:
+    from app.core.llm_client import ChatMessage, LLMProviderError, create_llm_client
+
+    secret = "secret-openai-key-123"
+    http_client = FakeAsyncHTTPClient(FakeResponse(status_code=401, text=f"bad key {secret}"))
+    settings = Settings(_env_file=None, llm_provider="openai", openai_api_key=secret)
+
+    client = create_llm_client(settings, http_client=http_client)
+
+    with pytest.raises(LLMProviderError) as exc_info:
+        await client.chat([ChatMessage(role="user", content="Hi")])
+
+    assert secret not in str(exc_info.value)
 
 
 def test_embedding_client_missing_api_key_raises() -> None:

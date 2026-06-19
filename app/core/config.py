@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     llm_provider: Literal["openai", "anthropic", "ollama"] = "anthropic"
     openai_api_key: str | None = None
     openai_model: str = "gpt-4o-mini"
+    openai_base_url: str = "https://api.openai.com/v1"
     anthropic_api_key: str | None = None
     anthropic_auth_token: str | None = None
     anthropic_base_url: str = "https://ark.cn-beijing.volces.com/api/coding"
