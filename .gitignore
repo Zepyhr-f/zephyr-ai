@@ -1,1 +1,21 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Unit test / coverage reports
+.coverage
+.coverage.*
+.pytest_cache/
+
+# Environments
+.env
+.venv
+env/
+venv/
+
+# Ruff
+.ruff_cache/
+
+# Agent related
 .agents
