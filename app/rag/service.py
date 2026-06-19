@@ -39,25 +39,31 @@ class RagChatService:
         message: str,
         conversation_id: str | None = None,
         top_k: int = 5,
+        temperature: float = 0.2,
+        max_tokens: int = 1024,
+        include_history: bool = True,
     ) -> RagChatResponse:
         normalized_message = message.strip()
         if not normalized_message:
             raise ValueError("message must not be blank")
 
+        conversation = await self._get_or_create_conversation(
+            conversation_id=conversation_id,
+            title=normalized_message[:80],
+        )
+        history = []
+        if conversation_id and include_history:
+            history = await self._recent_messages(conversation.id)
+
         results = await self.retrieval_service.search(normalized_message, limit=top_k)
-        prompt = self._build_prompt(normalized_message, results)
+        prompt = self._build_prompt(normalized_message, results, history)
         answer = await self.llm_client.chat(
             [
                 ChatMessage(role="system", content=SYSTEM_PROMPT),
                 ChatMessage(role="user", content=prompt),
             ],
-            max_tokens=1024,
-            temperature=0.2,
-        )
-
-        conversation = await self._get_or_create_conversation(
-            conversation_id=conversation_id,
-            title=normalized_message[:80],
+            max_tokens=max_tokens,
+            temperature=temperature,
         )
         sources = [self._source_from_result(result) for result in results]
         self.session.add(
@@ -106,7 +112,21 @@ class RagChatService:
         await self.session.flush()
         return conversation
 
-    def _build_prompt(self, message: str, results: list[SemanticSearchResult]) -> str:
+    async def _recent_messages(self, conversation_db_id: uuid.UUID) -> list[Message]:
+        result = await self.session.execute(
+            select(Message)
+            .where(Message.conversation_id == conversation_db_id)
+            .order_by(Message.created_at.desc())
+            .limit(6)
+        )
+        return list(reversed(result.scalars().all()))
+
+    def _build_prompt(
+        self,
+        message: str,
+        results: list[SemanticSearchResult],
+        history: list[Message] | None = None,
+    ) -> str:
         if not results:
             context = "当前没有检索到相关知识库片段。"
         else:
@@ -115,8 +135,14 @@ class RagChatService:
                 for index, result in enumerate(results, start=1)
             )
 
+        history_block = ""
+        if history:
+            formatted_history = "\n".join(self._format_history(item) for item in history)
+            history_block = f"历史对话：\n{formatted_history}\n\n"
+
         return (
             "请基于以下知识库上下文回答用户问题。\n\n"
+            f"{history_block}"
             f"知识库上下文：\n{context}\n\n"
             f"用户问题：\n{message}\n\n"
             "回答要求：\n"
@@ -136,6 +162,10 @@ class RagChatService:
             f"content={result.content}"
         )
 
+    def _format_history(self, message: Message) -> str:
+        content = message.content.replace("\n", " ")[:800]
+        return f"{message.role}: {content}"
+
     def _source_from_result(self, result: SemanticSearchResult) -> RagSource:
         preview = result.content.replace("\n", " ")[:200]
         return RagSource(
@@ -144,4 +174,12 @@ class RagChatService:
             header_path=result.header_path,
             score=result.score,
             preview=preview,
+            chunk_index=self._chunk_index(result),
         )
+
+    def _chunk_index(self, result: SemanticSearchResult) -> int | None:
+        metadata = result.metadata or {}
+        try:
+            return int(metadata.get("chunk_index"))
+        except (TypeError, ValueError):
+            return None

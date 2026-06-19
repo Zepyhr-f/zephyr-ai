@@ -1,3 +1,4 @@
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from uuid import uuid4
 
@@ -34,17 +35,30 @@ class FakeLLMClient:
 
 
 class FakeScalarResult:
+    def __init__(self, *, conversation=None, messages: list | None = None) -> None:
+        self.conversation = conversation
+        self.messages = messages or []
+
     def scalar_one_or_none(self):
-        return None
+        return self.conversation
+
+    def scalars(self):
+        return SimpleNamespace(all=lambda: self.messages)
 
 
 class FakeSession:
-    def __init__(self) -> None:
+    def __init__(self, *, conversation=None, messages: list | None = None) -> None:
         self.added: list = []
         self.flushed = 0
+        self.conversation = conversation
+        self.messages = messages or []
+        self.execute_calls = 0
 
     async def execute(self, statement):
-        return FakeScalarResult()
+        self.execute_calls += 1
+        if self.execute_calls == 1:
+            return FakeScalarResult(conversation=self.conversation)
+        return FakeScalarResult(messages=self.messages)
 
     def add(self, instance) -> None:
         if getattr(instance, "id", None) is None:
@@ -85,6 +99,7 @@ async def test_rag_chat_uses_retrieval_and_llm_and_returns_sources() -> None:
     assert len(response.sources) == 1
     assert response.sources[0].title == "版本与环境矩阵"
     assert response.sources[0].score == 0.8
+    assert response.sources[0].chunk_index == 1
     assert "pgvector" in response.sources[0].preview
     assert len(llm.calls) == 1
     prompt = llm.calls[0]["messages"][1].content
@@ -110,6 +125,99 @@ async def test_rag_chat_handles_no_sources_without_failing() -> None:
     assert response.sources == []
     prompt = llm.calls[0]["messages"][1].content
     assert "当前没有检索到相关知识库片段" in prompt
+
+
+@pytest.mark.asyncio
+async def test_rag_chat_injects_recent_history_when_enabled() -> None:
+    conversation_id = "thread-1"
+    conversation = SimpleNamespace(id=uuid4(), thread_id=conversation_id)
+    now = datetime.now(timezone.utc)
+    messages = [
+        SimpleNamespace(role="user", content=f"历史问题 {index}", created_at=now + timedelta(seconds=index))
+        for index in range(7)
+    ]
+    messages.append(
+        SimpleNamespace(
+            role="assistant",
+            content="历史回答" + "长" * 900,
+            created_at=now + timedelta(seconds=8),
+        )
+    )
+    service = RagChatService(
+        retrieval_service=FakeRetrievalService([make_result()]),
+        llm_client=FakeLLMClient(),
+        session=FakeSession(conversation=conversation, messages=messages[-6:]),  # type: ignore[arg-type]
+    )
+
+    await service.chat(message="继续说明", conversation_id=conversation_id)
+
+    prompt = service.llm_client.calls[0]["messages"][1].content  # type: ignore[attr-defined]
+    assert "历史对话" in prompt
+    assert "历史问题 2" in prompt
+    assert "历史问题 1" not in prompt
+    assert "长" * 801 not in prompt
+
+
+@pytest.mark.asyncio
+async def test_rag_chat_skips_history_when_disabled() -> None:
+    conversation_id = "thread-1"
+    conversation = SimpleNamespace(id=uuid4(), thread_id=conversation_id)
+    service = RagChatService(
+        retrieval_service=FakeRetrievalService([make_result()]),
+        llm_client=FakeLLMClient(),
+        session=FakeSession(
+            conversation=conversation,
+            messages=[SimpleNamespace(role="user", content="历史问题")],
+        ),  # type: ignore[arg-type]
+    )
+
+    await service.chat(
+        message="只回答当前问题",
+        conversation_id=conversation_id,
+        include_history=False,
+    )
+
+    prompt = service.llm_client.calls[0]["messages"][1].content  # type: ignore[attr-defined]
+    assert "历史对话" not in prompt
+    assert "历史问题" not in prompt
+
+
+@pytest.mark.asyncio
+async def test_rag_chat_passes_temperature_and_max_tokens_to_llm() -> None:
+    llm = FakeLLMClient()
+    service = RagChatService(
+        retrieval_service=FakeRetrievalService([make_result()]),
+        llm_client=llm,
+        session=FakeSession(),  # type: ignore[arg-type]
+    )
+
+    await service.chat(message="参数测试", temperature=0.7, max_tokens=2048)
+
+    assert llm.calls[0]["temperature"] == 0.7
+    assert llm.calls[0]["max_tokens"] == 2048
+
+
+@pytest.mark.asyncio
+async def test_rag_chat_returns_null_chunk_index_when_metadata_is_invalid() -> None:
+    result = make_result()
+    invalid_result = SemanticSearchResult(
+        content=result.content,
+        header_path=result.header_path,
+        document_title=result.document_title,
+        document_file_path=result.document_file_path,
+        metadata={"chunk_index": "bad"},
+        distance=result.distance,
+        score=result.score,
+    )
+    service = RagChatService(
+        retrieval_service=FakeRetrievalService([invalid_result]),
+        llm_client=FakeLLMClient(),
+        session=FakeSession(),  # type: ignore[arg-type]
+    )
+
+    response = await service.chat(message="chunk index")
+
+    assert response.sources[0].chunk_index is None
 
 
 @pytest.mark.asyncio
