@@ -40,6 +40,12 @@ class Settings(BaseSettings):
     api_port: int = 8000
     log_level: str = "INFO"
 
+    # Logging — file output. dir 不存在或无权限时自动 fallback 为仅 stdout。
+    log_dir: str = "/app/logs/ai"
+    log_file_enable: bool = True
+    log_file_max_bytes: int = 50 * 1024 * 1024  # 50MB
+    log_file_backup_count: int = 14
+
     # Gateway sign (replay protection + HMAC) — enforced for every request
     # except the configured health-exempt paths.
     zephyr_gateway_sign_secret: str | None = None

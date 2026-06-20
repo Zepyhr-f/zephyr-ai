@@ -8,6 +8,9 @@ from app.api.knowledge import router as knowledge_router
 from app.api.rag import router as rag_router
 from app.core.database import engine
 from app.core.gateway_sign import GatewaySignMiddleware
+from app.core.logging import setup_logging
+
+setup_logging()
 
 app = FastAPI(title="Zephyr AI", version="0.1.0")
 app.add_middleware(GatewaySignMiddleware)

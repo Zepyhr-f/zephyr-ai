@@ -13,8 +13,15 @@ services:
       API_PORT: 8000
     ports:
       - "127.0.0.1:${ZEPHYR_AI_PORT:-8000}:8000"
+    volumes:
+      - /app/logs/ai:/app/logs/ai
     networks:
       - infra_default
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "3"
 
 networks:
   infra_default:
