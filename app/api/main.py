@@ -7,8 +7,10 @@ from app.api.feedback import router as feedback_router
 from app.api.knowledge import router as knowledge_router
 from app.api.rag import router as rag_router
 from app.core.database import engine
+from app.core.gateway_sign import GatewaySignMiddleware
 
 app = FastAPI(title="Zephyr AI", version="0.1.0")
+app.add_middleware(GatewaySignMiddleware)
 app.include_router(rag_router)
 app.include_router(knowledge_router)
 app.include_router(conversations_router)

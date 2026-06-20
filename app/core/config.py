@@ -40,6 +40,17 @@ class Settings(BaseSettings):
     api_port: int = 8000
     log_level: str = "INFO"
 
+    # Gateway sign (replay protection + HMAC) — enforced for every request
+    # except the configured health-exempt paths.
+    zephyr_gateway_sign_secret: str | None = None
+    zephyr_gateway_sign_ttl_seconds: int = 300
+    zephyr_gateway_redis_host: str = "redis:6379"
+    zephyr_gateway_redis_password: str | None = None
+    zephyr_gateway_redis_db: int = 0
+    zephyr_gateway_nonce_prefix: str = "gw:nonce:"
+    zephyr_gateway_health_exempt: str = "/health"
+    zephyr_gateway_sign_required: bool = True
+
     @property
     def is_openai(self) -> bool:
         return self.llm_provider == "openai"

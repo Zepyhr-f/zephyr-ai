@@ -22,6 +22,7 @@ RUN if [ -n "${PIP_INDEX_URL:-}" ]; then pip config set global.index-url "${PIP_
         pytest==8.3.5 \
         pytest-asyncio==0.24.0 \
         pytest-cov==6.0.0 \
+        redis==5.2.1 \
         sqlalchemy==2.0.45 \
         uvicorn[standard]==0.32.1
 
